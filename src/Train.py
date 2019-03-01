@@ -125,7 +125,6 @@ for i in random_list:
     new_y_train.append(y_train[i // 2])
 
     
-    
 with tf.Session() as sess:
     net = Network(height=height,
                   width=width,

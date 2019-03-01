@@ -120,12 +120,7 @@ def cost_volume_aggre(img_L, img_R, k, max_disp):
 
 def conv3d_bolck(org, channel, kernelSize, is_training):
     conv = slim.conv3d(org, channel, kernelSize, padding='SAME', activation_fn=None)
-    cnn3d_bn = tf.contrib.layers.batch_norm(
-                                            conv,
-                                            data_format='NHWC',  
-                                            center=True,
-                                            scale=True,
-                                            is_training=is_training)
+    cnn3d_bn = tf.contrib.layers.batch_norm(conv, is_training=is_training)
     leaky = tf.nn.leaky_relu(cnn3d_bn, alpha=0.2)
     return leaky
 
