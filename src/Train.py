@@ -154,7 +154,7 @@ with tf.Session() as sess:
         train_len = len(x_train)
         for iteration in range(train_len // (batch_size * 2)):
 
-            x_left_batch, x_right_batch, y_batch = data_batch_get(new_x_train, new_y_train, 0, batch_size, pfm=True)
+            x_left_batch, x_right_batch, y_batch = data_batch_get(new_x_train, new_y_train, iteration, batch_size, pfm=True)
             x_left_batch = pre_process(x_left_batch.astype(np.float32), 3, batch_size)
             x_right_batch = pre_process(x_right_batch.astype(np.float32), 3, batch_size)
             y_batch = pre_process(y_batch.astype(np.float32), 1, batch_size)

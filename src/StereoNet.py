@@ -108,7 +108,6 @@ def cost_volume_aggre(img_L, img_R, k, max_disp):
 
     #disparity is not 0
     for dis in range(d):
-        # moving the features by disparity d can be done by padding zeros
         pad = tf.constant([[0, 0], [0, 0], [dis + 1, 0], [0, 0]], dtype=tf.int32)
         pad_R = tf.pad(img_R[:, :, :-1 - dis, :], pad, "CONSTANT")
         elw_tf = tf.concat([img_L, pad_R], 3)
@@ -123,7 +122,7 @@ def conv3d_bolck(org, channel, kernelSize, is_training):
     conv = slim.conv3d(org, channel, kernelSize, padding='SAME', activation_fn=None)
     cnn3d_bn = tf.contrib.layers.batch_norm(
                                             conv,
-                                            data_format='NHWC',  # Matching the "cnn" tensor which has shape (?, 9, 120, 160, 96).
+                                            data_format='NHWC',  
                                             center=True,
                                             scale=True,
                                             is_training=is_training)
@@ -139,7 +138,7 @@ def soft_arg_min(input):
 
     d_grid = tf.reshape(d_grid, [1, -1, 1, 1])
 
-    d_grid = tf.tile(d_grid, [input.shape[0].value, 1, input.shape[2].value, input.shape[3].value])#tf.tile(d_grid, [2])
+    d_grid = tf.tile(d_grid, [input.shape[0].value, 1, input.shape[2].value, input.shape[3].value])
 
     tmp = dispWeight * d_grid
     arg_soft_min = tf.reduce_sum(tmp, axis=1)
