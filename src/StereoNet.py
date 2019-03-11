@@ -113,8 +113,7 @@ def cost_volume_aggre(img_L, img_R, k, max_disp):
         elw_tf = tf.concat([img_L, pad_R], 3)
         dp_list.append(elw_tf)
 
-    total_pack_tf = tf.concat(dp_list, 0)
-    total_pack_tf = tf.expand_dims(total_pack_tf, 0)
+    total_pack_tf = tf.stack(dp_list, 1)
     return total_pack_tf
 
 
@@ -129,7 +128,7 @@ def soft_arg_min(input):
 
     negDispCost = input
     dispWeight = tf.nn.softmax(negDispCost, axis=1)
-    d_grid = tf.cast(tf.range(0, input.shape[1].value), dtype=tf.float32)
+    d_grid = tf.cast(tf.range(0, input.shape[1].value*16, 16), dtype=tf.float32)
 
     d_grid = tf.reshape(d_grid, [1, -1, 1, 1])
 

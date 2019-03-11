@@ -8,6 +8,9 @@ import cv2 as cv
 import time
 import random
 
+imagenet_stats = [[0.485, 0.456, 0.406],
+                  [0.229, 0.224, 0.225]]
+
 n_epochs = 10
 batch_size = 1
 
@@ -32,28 +35,52 @@ def data_batch_get(x_train, y_train, iteration, batch_size, pfm):
     for i in range(batch_size):
         imgR.append(cv.imread(x_train[iteration * batch_size * 2 + batch_size + i]))
 
-    imgL = (np.array(imgL)).astype(np.float32)
+    imgL = (np.array(imgL)).astype(np.float32) / 255.0
 
-    imgR = (np.array(imgR)).astype(np.float32)
+    imgR = (np.array(imgR)).astype(np.float32) / 255.0
+    disp_true = (np.array(disp_true)).astype(np.float32)
+
+    return imgL, imgR, disp_true
+    
+    
+def train_data_batch_get(x_train, y_train, iteration, batch_size, pfm):
+    imgL = []
+    imgR = []
+    disp_true = []
+
+    w, h = width, height
+    th, tw = 256, 512
+
+    x1 = random.randint(0, w - tw)
+    y1 = random.randint(0, h - th)
+
+    for i in range(batch_size):
+        try:
+            imgL.append(cv.imread(x_train[iteration * batch_size * 2 + i])[y1:y1+th, x1:x1+tw, :])
+            if pfm == True:
+                disp_true.append(ImgUtils.readPFM(y_train[iteration])[0][y1:y1+th, x1:x1+tw])
+            else:
+                disp_true.append(cv.imread(y_train[iteration], cv.IMREAD_GRAYSCALE))
+        except:
+            print(x_train[iteration * batch_size * 2])
+            print(y_train[iteration * batch_size * 2 + batch_size])
+            return None
+    for i in range(batch_size):
+        imgR.append(cv.imread(x_train[iteration * batch_size * 2 + batch_size + i])[y1:y1+th, x1:x1+tw, :])
+
+    imgL = (np.array(imgL)).astype(np.float32) / 255.0
+
+    imgR = (np.array(imgR)).astype(np.float32) / 255.0
     disp_true = (np.array(disp_true)).astype(np.float32)
 
     return imgL, imgR, disp_true
 
 
 def pre_process(image_data, channels, batch_size):
+    for i in range(batch_size):
+        for j in range(channels):
+            image_data[i, :, :, j] = (image_data[i, :, :, j] - imagenet_stats[0][j]) /  imagenet_stats[1][j]
 
-    if channels > 1:
-        for i in range(batch_size):
-            for j in range(channels):
-                minVal = np.min(image_data[i, :, :, j])
-                maxVal = np.max(image_data[i, :, :, j])
-                image_data[i, :, :, j] = (image_data[i, :, :, j] - minVal) / (maxVal - minVal) * 2 - 1
-    else:
-        for i in range(batch_size):
-            minVal = np.min(image_data[i, :, :])
-            maxVal = np.max(image_data[i, :, :])
-            image_data[i, :, :] = (image_data[i, :, :] - minVal) / (maxVal - minVal)
-            
     return image_data
 
 class Network():
@@ -124,14 +151,15 @@ for i in random_list:
     new_x_train.append(x_train[i + 1])
     new_y_train.append(y_train[i // 2])
 
-    
 with tf.Session() as sess:
-    net = Network(height=height,
-                  width=width,
+    train_h = 256
+    train_w = 512
+    net = Network(height=train_h,
+                  width=train_w,
                   batch_size=batch_size,
                   learning_rate=1e-3)
     x_left, x_right, y, is_training = net.get_placeholder()
-    model = StereoNet(batch_size, x_left, x_right, height, width, is_training)
+    model = StereoNet(batch_size, x_left, x_right, train_h, train_w, is_training)
     outputs = model.forward()
     loss_op, m1, m2 = net.loss(outputs, y)
     training_op = net.train_model(loss_op)
@@ -152,20 +180,13 @@ with tf.Session() as sess:
     for epoch in range(n_epochs):
         train_len = len(x_train)
         for iteration in range(train_len // (batch_size * 2)):
+            x_left_batch, x_right_batch, y_batch = train_data_batch_get(new_x_train, new_y_train, iteration, batch_size,
+                                                                  pfm=True)
+            x_left_batch = pre_process(x_left_batch, 3, batch_size)
+            x_right_batch = pre_process(x_right_batch, 3, batch_size)
 
-            x_left_batch, x_right_batch, y_batch = data_batch_get(new_x_train, new_y_train, iteration, batch_size, pfm=True)
-            x_left_batch = pre_process(x_left_batch.astype(np.float32), 3, batch_size)
-            x_right_batch = pre_process(x_right_batch.astype(np.float32), 3, batch_size)
-            y_batch = pre_process(y_batch.astype(np.float32), 1, batch_size)
-
-            sess.run(training_op, feed_dict={x_left: x_left_batch, x_right: x_right_batch, y: y_batch,
+            _, loss_val, merged_summary = sess.run([training_op, loss_op, merged], feed_dict={x_left: x_left_batch, x_right: x_right_batch, y: y_batch,
                                              is_training: True})
-
-            loss_val = loss_op.eval(feed_dict={x_left: x_left_batch, x_right: x_right_batch, y: y_batch,
-                                                is_training: True})
-
-            merged_summary = merged.eval(feed_dict={x_left: x_left_batch, x_right: x_right_batch, y: y_batch,
-                                                is_training: True})
             train_writer.add_summary(merged_summary, iteration)
 
             
@@ -177,12 +198,12 @@ with tf.Session() as sess:
                 pic = outputs.eval(feed_dict={x_left: x_left_batch, x_right: x_right_batch, y: y_batch,
                                                 is_training: True})
 
-                cv.imshow("x_left_batchpic", x_left_batch.reshape(height, width, -1))
-                cv.imshow("x_right_batchpic", x_right_batch.reshape(height, width, -1))
+                cv.imshow("x_left_batchpic", x_left_batch.reshape(train_h, train_w, -1))
+                cv.imshow("x_right_batchpic", x_right_batch.reshape(train_h, train_w, -1))
 
-                cv.imshow("pic", m1Val.reshape(height, width, -1))
+                cv.imshow("pic", m1Val.reshape(train_h, train_w, -1).astype(np.uint8))
                 #cv.imshow("secondVal", secondVal.reshape(height, width, -1))
-                cv.imshow("pic3", pic.reshape(height, width, -1))
+                cv.imshow("pic3", pic.reshape(train_h, train_w, -1).astype(np.uint8))
                 cv.waitKey(0)
 
             print("epoch:", epoch, "  iteration:", iteration, "\tloss:", loss_val)
